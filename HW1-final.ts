@@ -1,5 +1,5 @@
 
-const invokeN1 = (f, n) => 
+const invokeN1 = (f, n) =>
     n === 0 ? (x) => x : (x) => f(invokeN1(f,n-1)(x))
 
 interface Tree<T> {
@@ -22,7 +22,7 @@ interface Tree<T> {
 
 const makeLeaf : <T>(v:T)=>Tree<T> =
     v => {return {root: v, children:[]};}
-    
+
 const makeTree : <T>(v:T, children:Tree<T>[])=>Tree<T> =
     (v, children) => { return {root:v, children:children}}
 
@@ -31,7 +31,7 @@ const treeRoot : <T>(t: Tree<T>)=>T =
 
 const treeChildren: <T>(t: Tree<T>)=>Tree<T>[] =
     t => t.children;
-    
+
 const treeLeaf : <T>(t: Tree<T>)=>boolean =
     t => t.children.length === 0;
 
@@ -40,10 +40,10 @@ treeLeaf(makeLeaf(5))
 import {map, reduce} from 'ramda'
 
 const treeHeight : <T>(t:Tree<T>)=>number =
-    t => treeLeaf(t) ? 
-            0 : 
+    t => treeLeaf(t) ?
+            0 :
             1 + reduce(Math.max, 0, map(treeHeight, treeChildren(t)));
-            
+
 treeHeight(makeTree(1, [makeLeaf(2), makeLeaf(3)]))
 
 treeHeight({ root: 1, children: [ { root: 2, children: [] }, { root: 3, children: [{root: 4, children:[]}] } ] })
@@ -81,7 +81,7 @@ let newTree = treeMap((x:number) => x*x, tree4)
 assert.deepEqual(newTree.children[1].children[1].root, 49 , "test4");
 "all ok";
 
-// Answer 2.2 
+// Answer 2.2
 const treeForEachDF: <T>(f: Command<T>, tree: Tree<T>)=>void =
     (f, tree) => {
               if (treeLeaf(tree)){
@@ -163,13 +163,14 @@ interface TeArray {
 // ANSWER 3.1: Complete the type definition
 interface TeMap {
     tag: "map",
-    keys: String[],
-    types: TE[]
+    // keys: String[],
+    // types: TE[]
+    itemsType: {key:String, value:TE}[];
 };
 
 // Constructors
 // ============
-const makeTeString : ()=>TeString = 
+const makeTeString : ()=>TeString =
     () => { return {tag:"string"}}
 
 const makeTeNumber : ()=>TeNumber =
@@ -181,8 +182,8 @@ const makeTeBoolean : ()=>TeBoolean =
 const makeTeArray : (itemType: TE)=>TeArray =
     itemType => { return {tag: "array", itemType: itemType}}
 
-const makeTeMap : (keys: String[], types: TE[])=>TeMap =
-    (keys, types) => { return {tag: "map", keys: keys, types:types}}
+const makeTeMap : (itemsType: {key:String, value:TE}[])=>TeMap =
+    (itemsType) => { return {tag: "map", itemsType: itemsType}}
 
 
 // Type predicates
@@ -200,7 +201,7 @@ const isTeArray : (te:TE)=>boolean =
     te => te.tag === "array";
 
 const isTeMap : (te:TE)=>boolean =
-    te => te.tag === "map";
+    te => te.tag === "map" && te.itemsType.length!=0 && te.itemsType.every( (map)=> te.itemsType.filter((x)=>map.key===x.key).length===1);
 
 
 // Accessors
@@ -209,21 +210,33 @@ const teArrayItemType : (tea : TeArray)=>TE =
     tea => tea.itemType;
 
 const teMapKey : (tem : TeMap, key: string)=> TE =
-    (tem, key) => tem.types[tem.keys.indexOf(key)]
+    (tem, key) => tem.itemsType.filter((x)=>x.key===key).length===1?
+                  tem.itemsType.filter((x)=>x.key===key)[0].value:
+                  undefined;
 
 // Test constructors
 assert.deepEqual({tag:"string"}, makeTeString() , "test1");
 assert.deepEqual({tag:"boolean"}, makeTeBoolean() , "test1");
 assert.deepEqual({tag:"number"}, makeTeNumber() , "test1");
 assert.deepEqual({tag:"array", itemType:{tag:"string"}}, makeTeArray(makeTeString()) , "test1");
-assert.deepEqual({tag:"map", keys:["a"], types:[{tag:"string"}]}, makeTeMap(["a"],[makeTeString()]) , "test1");
+assert.deepEqual({tag:"map", itemsType:[ {key:"a", value:{tag:"string"}} ]} ,makeTeMap([{key: "a", value:makeTeString()}]) ,"test1");
 "all ok"
 
-let obj1 = makeTeMap(["a", "b", "c"],[makeTeString(), makeTeArray(makeTeNumber()), makeTeMap(["c1", "c2"],[makeTeBoolean(), makeTeArray(makeTeArray(makeTeString()))])])
+let obj1 = makeTeMap([
+  {key: "a", value:makeTeString()},
+  {key: "b", value:makeTeArray(makeTeNumber())},
+  {key: "c", value:makeTeMap([
+    {key: "c1", value:makeTeBoolean()},
+    {key: "c2", value:makeTeArray(makeTeArray(makeTeString()))}
+  ])}
+])
 // Test accessors
 assert.deepEqual(teMapKey(obj1, "a"), makeTeString() , "test1");
 assert.deepEqual(teMapKey(obj1, "b"), makeTeArray(makeTeNumber()) , "test1");
-assert.deepEqual(teMapKey(obj1, "c"), makeTeMap(["c1", "c2"],[makeTeBoolean(), makeTeArray(makeTeArray(makeTeString()))]) , "test1");
+assert.deepEqual(teMapKey(obj1, "c"), makeTeMap([
+  {key: "c1", value:makeTeBoolean()},
+  {key: "c2", value:makeTeArray(makeTeArray(makeTeString()))}
+]) , "test1");
 assert.deepEqual(teMapKey(<TeMap>teMapKey(obj1, "c"), "c1"), makeTeBoolean() , "test1");
 assert.deepEqual(teMapKey(<TeMap>teMapKey(obj1, "c"), "c2"), makeTeArray(makeTeArray(makeTeString())) , "test1");
 "all ok"
@@ -288,15 +301,76 @@ assert.ok(true === typeCheck([[90],[80],[90]], makeTeArray(makeTeArray(makeTeNum
 "all ok"
 
 // Test 7
-assert.ok(true === typeCheck({a:8, b:"8"}, makeTeMap(["a", "b"],[makeTeNumber(), makeTeString()])));
+assert.ok(true === typeCheck({a:8, b:"8"}, makeTeMap([{key: "a", value:makeTeNumber()}, {key: "b", value:makeTeString()}])));
 "all ok"
 
 // Test 8
-assert.ok(false === typeCheck({a:8, c:"8"}, makeTeMap(["a", "b"],[makeTeNumber(), makeTeString()])));
+assert.ok(false === typeCheck({a:8, c:"8"}, makeTeMap([{key: "a", value:makeTeNumber()}, {key: "b", value:makeTeString()}])));
 "all ok"
 
 // Test 9
 // { a:string; b:number[]; c:{c1:boolean; c2:string[][]}}
-let obj2 = makeTeMap(["a", "b", "c"],[makeTeString(), makeTeArray(makeTeNumber()), makeTeMap(["c1", "c2"],[makeTeBoolean(), makeTeArray(makeTeArray(makeTeString()))])])
+let obj2 = makeTeMap([
+  {key: "a", value:makeTeString()},
+  {key: "b", value:makeTeArray(makeTeNumber())},
+  {key: "c", value:makeTeMap([
+    {key: "c1", value:makeTeBoolean()},
+    {key: "c2", value:makeTeArray(makeTeArray(makeTeString()))}
+  ])}
+])
+
 assert.ok(true === typeCheck({a:"123", b:[1,2,3], c:{c1:false, c2:[["o","k"],["g","o","o","d"]]}}, obj2));
 "all ok"
+
+let jsValue = {a:1};
+let te = makeTeMap([
+  {key:"a", value:makeTeNumber()},
+  {key:"b", value:makeTeString()}
+])
+
+console.log(checkMap(jsValue, te))
+
+
+// let a = [1,2,3,4,5].reduce((x,y)=>x+y, 0);//Accumulator
+// let b = [1,2,3,4,5].map((x)=>x+x);//Transformer
+// let c = [1,2,3,4,5].forEach((x)=>console.log(x));//Command
+// let d = [1,2,3,4,5].filter((x)=>x>2);//Predicate
+// let e = [1,2,3,4,5].some((x)=>x>2);//Predicate
+// let f = [1,2,3,4,5].every((x)=>x>2);//Predicate
+//
+// console.log(e)
+// console.log(f)
+//
+//
+//
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//

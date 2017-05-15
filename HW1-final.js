@@ -49,7 +49,7 @@ var tree4 = makeTree(1, [makeTree(2, [makeLeaf(3), makeLeaf(4)]), makeTree(5, [m
 var newTree = treeMap(function (x) { return x * x; }, tree4);
 assert.deepEqual(newTree.children[1].children[1].root, 49, "test4");
 "all ok";
-// Answer 2.2 
+// Answer 2.2
 var treeForEachDF = function (f, tree) {
     if (treeLeaf(tree)) {
         f(treeRoot(tree));
@@ -108,30 +108,42 @@ var makeTeString = function () { return { tag: "string" }; };
 var makeTeNumber = function () { return { tag: "number" }; };
 var makeTeBoolean = function () { return { tag: "boolean" }; };
 var makeTeArray = function (itemType) { return { tag: "array", itemType: itemType }; };
-var makeTeMap = function (keys, types) { return { tag: "map", keys: keys, types: types }; };
+var makeTeMap = function (itemsType) { return { tag: "map", itemsType: itemsType }; };
 // Type predicates
 // ===============
 var isTeNumber = function (te) { return te.tag === "number"; };
 var isTeBoolean = function (te) { return te.tag === "boolean"; };
 var isTeString = function (te) { return te.tag === "string"; };
 var isTeArray = function (te) { return te.tag === "array"; };
-var isTeMap = function (te) { return te.tag === "map"; };
+var isTeMap = function (te) { return te.tag === "map" && te.itemsType.length != 0 && te.itemsType.every(function (map) { return te.itemsType.filter(function (x) { return map.key === x.key; }).length === 1; }); };
 // Accessors
 // =========
 var teArrayItemType = function (tea) { return tea.itemType; };
-var teMapKey = function (tem, key) { return tem.types[tem.keys.indexOf(key)]; };
+var teMapKey = function (tem, key) { return tem.itemsType.filter(function (x) { return x.key === key; }).length === 1 ?
+    tem.itemsType.filter(function (x) { return x.key === key; })[0].value :
+    undefined; };
 // Test constructors
 assert.deepEqual({ tag: "string" }, makeTeString(), "test1");
 assert.deepEqual({ tag: "boolean" }, makeTeBoolean(), "test1");
 assert.deepEqual({ tag: "number" }, makeTeNumber(), "test1");
 assert.deepEqual({ tag: "array", itemType: { tag: "string" } }, makeTeArray(makeTeString()), "test1");
-assert.deepEqual({ tag: "map", keys: ["a"], types: [{ tag: "string" }] }, makeTeMap(["a"], [makeTeString()]), "test1");
+assert.deepEqual({ tag: "map", itemsType: [{ key: "a", value: { tag: "string" } }] }, makeTeMap([{ key: "a", value: makeTeString() }]), "test1");
 "all ok";
-var obj1 = makeTeMap(["a", "b", "c"], [makeTeString(), makeTeArray(makeTeNumber()), makeTeMap(["c1", "c2"], [makeTeBoolean(), makeTeArray(makeTeArray(makeTeString()))])]);
+var obj1 = makeTeMap([
+    { key: "a", value: makeTeString() },
+    { key: "b", value: makeTeArray(makeTeNumber()) },
+    { key: "c", value: makeTeMap([
+            { key: "c1", value: makeTeBoolean() },
+            { key: "c2", value: makeTeArray(makeTeArray(makeTeString())) }
+        ]) }
+]);
 // Test accessors
 assert.deepEqual(teMapKey(obj1, "a"), makeTeString(), "test1");
 assert.deepEqual(teMapKey(obj1, "b"), makeTeArray(makeTeNumber()), "test1");
-assert.deepEqual(teMapKey(obj1, "c"), makeTeMap(["c1", "c2"], [makeTeBoolean(), makeTeArray(makeTeArray(makeTeString()))]), "test1");
+assert.deepEqual(teMapKey(obj1, "c"), makeTeMap([
+    { key: "c1", value: makeTeBoolean() },
+    { key: "c2", value: makeTeArray(makeTeArray(makeTeString())) }
+]), "test1");
 assert.deepEqual(teMapKey(teMapKey(obj1, "c"), "c1"), makeTeBoolean(), "test1");
 assert.deepEqual(teMapKey(teMapKey(obj1, "c"), "c2"), makeTeArray(makeTeArray(makeTeString())), "test1");
 "all ok";
@@ -176,13 +188,39 @@ assert.ok(false === typeCheck([1, 2, 3], makeTeArray(makeTeString())));
 assert.ok(true === typeCheck([[90], [80], [90]], makeTeArray(makeTeArray(makeTeNumber()))));
 "all ok";
 // Test 7
-assert.ok(true === typeCheck({ a: 8, b: "8" }, makeTeMap(["a", "b"], [makeTeNumber(), makeTeString()])));
+assert.ok(true === typeCheck({ a: 8, b: "8" }, makeTeMap([{ key: "a", value: makeTeNumber() }, { key: "b", value: makeTeString() }])));
 "all ok";
 // Test 8
-assert.ok(false === typeCheck({ a: 8, c: "8" }, makeTeMap(["a", "b"], [makeTeNumber(), makeTeString()])));
+assert.ok(false === typeCheck({ a: 8, c: "8" }, makeTeMap([{ key: "a", value: makeTeNumber() }, { key: "b", value: makeTeString() }])));
 "all ok";
 // Test 9
 // { a:string; b:number[]; c:{c1:boolean; c2:string[][]}}
-var obj2 = makeTeMap(["a", "b", "c"], [makeTeString(), makeTeArray(makeTeNumber()), makeTeMap(["c1", "c2"], [makeTeBoolean(), makeTeArray(makeTeArray(makeTeString()))])]);
+var obj2 = makeTeMap([
+    { key: "a", value: makeTeString() },
+    { key: "b", value: makeTeArray(makeTeNumber()) },
+    { key: "c", value: makeTeMap([
+            { key: "c1", value: makeTeBoolean() },
+            { key: "c2", value: makeTeArray(makeTeArray(makeTeString())) }
+        ]) }
+]);
 assert.ok(true === typeCheck({ a: "123", b: [1, 2, 3], c: { c1: false, c2: [["o", "k"], ["g", "o", "o", "d"]] } }, obj2));
 "all ok";
+var jsValue = { a: 1 };
+var te = makeTeMap([
+    { key: "a", value: makeTeNumber() },
+    { key: "b", value: makeTeString() }
+]);
+console.log(checkMap(jsValue, te));
+// let a = [1,2,3,4,5].reduce((x,y)=>x+y, 0);//Accumulator
+// let b = [1,2,3,4,5].map((x)=>x+x);//Transformer
+// let c = [1,2,3,4,5].forEach((x)=>console.log(x));//Command
+// let d = [1,2,3,4,5].filter((x)=>x>2);//Predicate
+// let e = [1,2,3,4,5].some((x)=>x>2);//Predicate
+// let f = [1,2,3,4,5].every((x)=>x>2);//Predicate
+//
+// console.log(e)
+// console.log(f)
+//
+//
+//
+//
